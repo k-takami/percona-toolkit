@@ -3,6 +3,7 @@ percona-toolkit
 
 Percona Toolkit Fork
 
+<pre>
 Percona Toolkit has a lot of excellent features(module), Among that pt-online-schema-change is really really useful feature as almost DBAs already experienced.
 
 But they can't cover every requests of the world even though that is the best tool and pt-online-schema-change also.
@@ -167,3 +168,4 @@ pt-online-schema-change already has a feature to control the copy speed based on
 So on patched pt-online-schema-change, we added --sleep-time-us parameter. If you specify --sleep-time-us parameter with proper integer value, patched pt-online-schema-change will sleep specified micro seconds after each chunk.
 
 --sleep-time-us parameter will make slower online schema change job, but you can change table schema more stable manner.
+</pre>
