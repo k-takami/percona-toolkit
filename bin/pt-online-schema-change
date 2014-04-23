@@ -7737,7 +7737,8 @@ use Percona::Toolkit;
 use constant PTDEBUG => $ENV{PTDEBUG} || 0;
 
 use List::Util qw(max);
-use Time::HiRes qw(time sleep);
+use Time::HiRes qw(time sleep usleep);
+
 use Data::Dumper;
 $Data::Dumper::Indent    = 1;
 $Data::Dumper::Sortkeys  = 1;
@@ -7884,6 +7885,26 @@ sub main {
       open  STDOUT, '>', '/dev/null'
          or warn "Cannot reopen STDOUT to /dev/null: $OS_ERROR";
    }
+
+   print "-- Additional parameters ----------------------------------\n";
+   if($o->has('skip-copy-columns') && defined $o->get('skip-copy-columns') && length($o->get('skip-copy-columns'))>0){
+       print "  >> skip columns : " . $o->get('skip-copy-columns') . "\n";
+   }else{
+       print "  >> skip columns : Not specified\n";
+   }
+
+   if($o->has('sleep-time-us') && defined $o->get('sleep-time-us') && length($o->get('sleep-time-us'))>0){
+       print "  >> sleep time (us) : " . $o->get('sleep-time-us') . "\n";
+   }else{
+       print "  >> sleep time (us) : Not specified\n";
+   }
+
+   if($o->has('prompt-before-copy') && defined $o->get('prompt-before-copy')){
+       print "  >> prompting user operation : Yes\n";
+   }else{
+       print "  >> prompting user operation : No\n";
+   }
+   print "-----------------------------------------------------------\n";
 
    # ########################################################################
    # Connect to MySQL.
@@ -8595,6 +8616,13 @@ sub main {
    );
    $new_tbl->{tbl_struct} = $tp->parse($ddl);
 
+   ## Build hash map for exclude(skip) columns
+   my @tmp_skip_cols = ();
+   if($o->has('skip-copy-columns') && defined $o->get('skip-copy-columns') && length($o->get('skip-copy-columns'))>0){
+       @tmp_skip_cols = split(',', $o->get('skip-copy-columns'));
+   }
+   my %skip_cols = map { $_ => 1 } @tmp_skip_cols;
+
    # Determine what columns the original and new table share.
    # If the user drops a col, that's easy: just don't copy it.  If they
    # add a column, it must have a default value.  Other alterations
@@ -8608,6 +8636,8 @@ sub main {
    my @common_cols = map  { +{ old => $_, new => $renamed_cols->{$_} || $_ } }
                      sort { $col_posn->{$a} <=> $col_posn->{$b} }
                      grep { $new_cols->{$_} || $renamed_cols->{$_} }
+   ## skipping ignored columns
+                     grep { ! $skip_cols{$_} }
                      keys %$orig_cols;
    PTDEBUG && _d('Common columns', Dumper(\@common_cols));
 
@@ -8944,6 +8974,14 @@ sub main {
             Quoter  => $q,
             stats   => \%stats,
          );
+
+         if($o->has('sleep-time-us') && defined $o->get('sleep-time-us') && length($o->get('sleep-time-us'))>0){
+           my $sleep_time_us = $o->get('sleep-time-us');
+           if( $sleep_time_us > 0){
+               usleep($sleep_time_us);
+           }
+         }
+
          PTDEBUG && _d('Nibble time:', $tbl->{nibble_time});
 
          # We're executing REPLACE queries which don't return rows.
@@ -9029,6 +9067,12 @@ sub main {
            . "(" . join(', ', map { $q->quote($_->{new}) } @common_cols) . ") "
            . "SELECT";
    my $select = join(', ', map { $q->quote($_->{old}) } @common_cols);
+
+   if($o->has('print-sql') && defined $o->get('print-sql')){
+       print "-- Copy Query --------------------------------------------\n";
+       print $dml . " " . $select . " ...;\n";
+       print "----------------------------------------------------------\n";
+   }
 
    # The chunk size is auto-adjusted, so use --chunk-size as
    # the initial value, but then save and update the adjusted
@@ -10096,6 +10140,31 @@ sub create_triggers {
       ['ins', $insert_trigger],
    );
 
+   if($o->has('print-sql') && defined $o->get('print-sql')){
+       print "-- Create Triggers ---------------------------------------\n";
+       print $insert_trigger . ";\n";
+       print $update_trigger. ";\n";
+       print $delete_trigger . ";\n";
+       print "----------------------------------------------------------\n";
+   }
+
+
+
+   ## Prompt and Waiting user custom operation
+   if($o->has('prompt-before-copy') && defined $o->get('prompt-before-copy')){
+      my $tmp_user_input = "";
+      print "\n";
+      print "Table copy operation is paused temporarily by user request '--prompt-before-copy'.\n";
+      print "pt-online-schema-change utility created new table, but not triggers.\n";
+      print "   ==> new table name : $new_tbl->{name} \n\n";
+      print "So if you have any custom operation on new table, do it now.\n";
+      print "Type 'yes', when you ready to go.\n";
+      do{
+         print "Should I continue to copy [Yes] ? : ";
+         chomp ($tmp_user_input = <STDIN>);
+      }while( !($tmp_user_input =~ m/^yes$/i) );
+   }
+
    my @trigger_names;
    @drop_trigger_sqls = ();
    foreach my $trg ( @triggers ) {
@@ -10736,6 +10805,26 @@ tool's built-in functionality if desired.
 =item --ask-pass
 
 Prompt for a password when connecting to MySQL.
+
+=item --prompt-before-copy
+
+Prompt before data copy to new temporary table for user custom operation
+
+=item --print-sql
+
+Print sql ran by pt-online-schema-change utility for Trigger and Table
+
+=item --skip-copy-columns
+
+short form: -X; type: string
+
+Skip columns during copy
+
+=item --sleep-time-us
+
+short form: -Z; type: int
+
+Sleep time in micro seconds between each chunk
 
 =item --charset
 
