@@ -86,7 +86,7 @@ Like below, patched pt-online-schema-change will print out some informational me
 -- Create Triggers ---------------------------------------
 CREATE TRIGGER `pt_osc_test_test_partition_ins` AFTER INSERT ON `test`.`test_partition` FOR EACH ROW REPLACE INTO `test`.`_test_partition_new` ...
 CREATE TRIGGER `pt_osc_test_test_partition_upd` AFTER UPDATE ON `test`.`test_partition` FOR EACH ROW REPLACE INTO `test`.`_test_partition_new` ...
-CREATE TRIGGER `pt_osc_test_test_partition_del` AFTER DELETE ON `test`.`test_partition` FOR EACH ROW DELETE IGNORE FROM `test`.`_test_partition_new` WHERE `test`.`_test_partition_new`.`id` &gt;=> OLD.`id`;
+CREATE TRIGGER `pt_osc_test_test_partition_del` AFTER DELETE ON `test`.`test_partition` FOR EACH ROW DELETE IGNORE FROM `test`.`_test_partition_new` WHERE `test`.`_test_partition_new`.`id` &lt;=> OLD.`id`;
 ----------------------------------------------------------
 
 Table copy operation is paused temporarily by user request '--prompt-before-copy'.
@@ -95,7 +95,7 @@ pt-online-schema-change utility created new table, but not triggers.
 
 So if you have any custom operation on new table, do it now.
 Type 'yes', when you ready to go.
-Should I continue to copy [Yes] ? : &gt;== pt-online-schema-change will wait user input after creating new table (_test_partition_new)
+Should I continue to copy [Yes] ? : &lt;== pt-online-schema-change will wait user input after creating new table (_test_partition_new)
 
 
 At this time, we can run ALTER TABLE PARTITION .. statement on another terminal. After that type "yes" on pt-online-schema-change terminal.
